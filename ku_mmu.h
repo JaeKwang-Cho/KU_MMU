@@ -32,7 +32,6 @@ typedef struct PCB{
     void* next;
 }PCB;
 
-
 int get_PD_num(int VirAdd){
     int pd_num = GET_PD & VirAdd;
     pd_num >> 6;
@@ -116,71 +115,84 @@ page* remapping_page(){
 
 
 }
-
-void* make_process(int pid, int init_VirAdd){
-    static int program_counter = 0;
-    if(ku_mmu_PCBs){
-        ku_mmu_PCBs = malloc(sizeof(PCB));
-        ((PCB*)(ku_mmu_PCBs))->pid= pid;
-        page* PDE = get_free_page();
-        ((PCB*)(ku_mmu_PCBs))->PD_BR = PDE;
-        ((PCB*)(ku_mmu_PCBs))->next = NULL;
-        ((PCB*)(ku_mmu_PCBs))->program_counter = program_counter;
-        program_counter++;
-    }else{
-        PCB * iter = ku_mmu_PCBs;
-        while(iter->next = NULL){
-            if(iter->pid == pid){
-                return NULL;
-            }
-            iter = iter->next;
+PCB* get_pcb(int pid){
+    PCB * iter = ku_mmu_PCBs;
+    while(iter->next = NULL){
+        if(iter->pid == pid){
+            return iter;
         }
-        iter->next = malloc(sizeof(PCB));
-        ((PCB*)(iter->next))->pid = pid;
-        page* PDE = get_free_page();
-        ((PCB*)(iter->next))->PD_BR = PDE;
-        ((PCB*)(iter->next))->next = NULL;
-        ((PCB*)(iter->next))->program_counter = program_counter;
-        program_counter++;
+        iter = iter->next;
     }
+    return NULL;
+}
+
+void* allocate_page(int pid, int VirAdd){
+    int pd_num = get_PD_num(VirAdd);
+    int pmd_num = get_PMD_num(VirAdd);
+    int pt_num = get_PT_num(VirAdd);
+    int offset = get_offset_num(VirAdd);
+
+    PCB* pcb = get_pcb(pid);
+
+    int* pde = (int*)((pcb->PD_BR)->p_mem)+pd_num;
+
+    int* pfn = NULL;
+
+    int* p_mde = (int*)(pde)+pmd_num;
+    if(p_mde == NULL){
+        if(p_mde = get_free_page()){
+            return NULL;
+        }
+    }
+    int* pte = (int*)(p_mde)+pt_num;
+    if(pte == NULL){
+        if(pte = get_free_page()){
+            return NULL;
+        }
+        *(int*)(((page*)pte)->p_mem) |= PRESENT;
+        pfn = (int*)(pte)+offset;
+    }else{
+        if(*(int*)(((page*)pte)->p_mem) & PRESENT){
+            pfn = (int*)(pte)+offset;
+        }else{
+            // todo: get page from swap_space;
+        }
+    }
+    return pfn;
+}
+
+
+
+struct ku_pte* set_process(int pid){
+    static int program_counter = 0;
+
+    PCB * iter = ku_mmu_PCBs;
+    while(iter->next = NULL){
+        if(iter->pid == pid){
+            return iter->PD_BR->p_mem;
+        }
+        iter = iter->next;
+    }
+    iter->next = malloc(sizeof(PCB));
+    ((PCB*)(iter->next))->pid = pid;
+    page* PD = get_free_page();
+    ((PCB*)(iter->next))->PD_BR = PD;
+    ((PCB*)(iter->next))->next = NULL;
+    ((PCB*)(iter->next))->program_counter = program_counter;
+    program_counter++;
+
+    return PD->p_mem;
 }
 
 PCB* get_PCB(int pid){
     // todo: optimize make process and get program counter (possibly hash_map)
 }
 
-void* access_memory(int pid,int VirAdd){
-    int pd_num = get_PD_num(VirAdd);
-    int pmd_num = get_PMD_num(VirAdd);
-    int pt_num = get_PT_num(VirAdd);
-    int offset = get_offset_num(VirAdd);
-
+int check_mapped(int VirAdd){
 
 }
 
 
-void destroy_free_list(){
-    page* iter =ku_mmu_free_list;
-    page* formal = NULL;
-    while(iter){
-        formal = iter;
-        iter = iter+1;
-        if(formal){
-            free(formal);
-        }
-    }
-}
-void destroy_busy_list(){
-    page* iter =ku_mmu_busy_list;
-    page* formal = NULL;
-    while(iter){
-        formal = iter;
-        iter = iter+1;
-        if(formal){
-            free(formal);
-        }
-    }
-}
 
 void* ku_mmu_init (unsigned int mem_size ,
                   unsigned int swap_size){
@@ -200,12 +212,61 @@ void* ku_mmu_init (unsigned int mem_size ,
 }
 int ku_run_proc (char pid,
                  struct ku_pte **ku_cr3){
-
+    *ku_cr3 = set_process(pid);
 }
 int ku_page_fault (char pid ,
                    char va){
+// todo : va 자리에 1) 차지하고 있는 애를 스왑 스페이스로 내쫓고, 자리 내주기 2) 또 자리가 없으면 그냥 0
+    return allocate_page(pid,va);
 
 }
 int ku_traverse(void *, char, void *);
 
+
+void destroy_free_list(){
+    page* iter =ku_mmu_free_list;
+    page* formal = NULL;
+    while(iter){
+        formal = iter;
+        iter = iter+1;
+        if(formal){
+            free(formal);
+        }
+    }
+}
+void destroy_busy_list(){
+    page* iter =ku_mmu_busy_list;
+    page* formal = NULL;
+    while(iter){
+        formal = iter;
+        iter = iter->next;
+        if(formal){
+            free(formal);
+        }
+    }
+}
+void destroy_swap_list(){
+    page* iter =ku_mmu_swap_space;
+    page* formal = NULL;
+    while(iter){
+        formal = iter;
+        iter = iter->next;
+        if(formal){
+            free(formal);
+        }
+    }
+}
+void destroy_PCB_list(){
+    page* iter =ku_mmu_PCBs;
+    page* formal = NULL;
+    while(iter){
+        formal = iter;
+        iter = iter->next;
+        if(formal){
+            free(formal);
+        }
+    }
+}
+
 #endif //KU_MMU_KU_MMU_H
+

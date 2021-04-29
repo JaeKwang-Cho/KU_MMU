@@ -8,6 +8,8 @@ void ku_mmu_fin(FILE *fd, void *pmem)
     if(pmem) free(pmem);
     destroy_free_list();
     destroy_busy_list();
+    destroy_swap_list();
+    destroy_PCB_list();
 }
 
 int main(int argc, char *argv[])
