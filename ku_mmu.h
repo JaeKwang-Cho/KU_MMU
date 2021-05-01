@@ -7,6 +7,8 @@
 
 #define ZERO (0b00000000)
 #define PRESENT (0b00000010)
+#define SET_INVALID (0b11111110)
+#define SET_VALID (0b11111111)
 #define GET_PD (0b11000000)
 #define GET_PMD (0b00110000)
 #define GET_PT (0b00001100)
@@ -14,22 +16,30 @@
 
 #include <memory.h>
 
-void* ku_mmu_free_list = NULL;
-void* ku_mmu_busy_list = NULL;
-void* ku_mmu_swap_space = NULL;
-void* ku_mmu_PCBs = NULL;
-
 typedef struct page{
     void* next;
-    void* p_mem;
+    char kuPte[4];
+    void* p_mem[4];
+    void* parent;
 }page;
 
 typedef struct PCB{
     int pid;
     page* PD_BR;
-    int program_counter;
     void* next;
 }PCB;
+
+void* ku_mmu_pfn = NULL;
+void* ku_mmu_swap_space = NULL;
+
+page** ku_mmu_Swap_Space_array = NULL;
+
+void* ku_mmu_free_list = NULL;
+void* ku_mmu_busy_list = NULL;
+
+void* ku_mmu_PCBs = NULL;
+
+
 
 int get_PD_num(const int VirAdd){
     int pd_num = GET_PD & VirAdd;
@@ -54,27 +64,30 @@ int get_offset_num(const int VirAdd){
 
 // todo: ku_make_swap_space(p_mem,mem_size);
 
-
-
-page* remapping_page(){
-    // todo: swap_page 를 가져와서 다시 CPU 위에 올리기
-}
-
-void ku_make_free_list(const void* p_mem, unsigned int  p_mem_size){
+void ku_make_pfn_list(const void* p_mem,const unsigned int  p_mem_size){
     unsigned int page_num = p_mem_size/4;
-    int* iter_p_mem = (int*)p_mem;
 
-    ku_mmu_free_list = malloc(sizeof(page));
-    page* iter = ku_mmu_free_list;
+    ku_mmu_pfn = malloc(sizeof(page));
+    ku_mmu_free_list = ku_mmu_pfn;
+    page* iter = ku_mmu_pfn;
 
-    iter->p_mem = iter_p_mem;
+    for(int i = 0;i<4;i++){
+        iter->kuPte[i] &= ZERO;
+        iter->p_mem[i] = ((char*)p_mem)+i;
+    }
+    iter->parent = NULL;
     iter->next = NULL;
+
     page_num--;
     if(page_num > 1){
         for(int i = 0;i<page_num;i++){
             iter->next = malloc(sizeof (page));
             iter = iter->next;
-            iter->p_mem = iter_p_mem+i;
+            for(int j = 0;j<4;j++){
+                iter->kuPte[j] &= ZERO;
+                iter->p_mem[j] = (char*)(((int*)p_mem) + i)+j;
+            }
+            iter->parent = NULL;
             iter->next = NULL;
         }
     }
@@ -82,21 +95,30 @@ void ku_make_free_list(const void* p_mem, unsigned int  p_mem_size){
         return;
     }
 }
-void ku_make_swap_space(const void* p_mem, const unsigned int  p_mem_size, unsigned  int swap_size){
-    unsigned int page_num = swap_size/4;
-    int* iter_swap_space = p_mem;
+void ku_make_swap_space(void* p_mem,unsigned int  p_mem_size,unsigned  int swap_size){
+    unsigned int swap_num = swap_size/4;
 
     ku_mmu_swap_space = malloc(sizeof(page));
     page* iter = ku_mmu_swap_space;
 
-    iter->p_mem = iter_swap_space + p_mem_size;
+    void* p_swap_start_mem = ((char*)p_mem)+p_mem_size;
+
+    for(int i = 0;i<4;i++){
+        iter->kuPte[i] &= ZERO;
+        iter->p_mem[i]= p_swap_start_mem+i;
+    }
+    iter->parent = NULL;
     iter->next = NULL;
-    page_num--;
-    if(page_num > 1){
-        for(int i = 0;i<page_num;i++){
+    swap_num--;
+    if(swap_num > 1){
+        for(int i = 0;i<swap_num;i++){
             iter->next = malloc(sizeof (page));
             iter = iter->next;
-            iter->p_mem = iter_swap_space+i;
+            for(int j = 0;j<4;j++){
+                iter->kuPte[j] &= ZERO;
+                iter->p_mem[j] = (char*)(((int*)p_swap_start_mem) + i)+j;
+            }
+            iter->parent = NULL;
             iter->next = NULL;
         }
     }
@@ -114,8 +136,10 @@ void* ku_mmu_init (unsigned int mem_size ,
         return NULL;
     }
 
-    ku_make_free_list(p_mem,mem_size);
+    ku_make_pfn_list(p_mem,mem_size);
     ku_make_swap_space(p_mem,mem_size,swap_size);
+
+    ku_mmu_Swap_Space_array = malloc(sizeof(page*)*swap_size);
 
     memset(p_mem,ZERO,total_size);
 
@@ -151,8 +175,7 @@ page* get_free_page(const int isTable){
     return free_page;
 }
 
-struct ku_pte* set_process(const int pid){
-    static int program_counter = 0;
+void* make_PCB_return_PD_BR(const int pid){
 
     PCB * iter = ku_mmu_PCBs;
     while(iter != NULL){
@@ -166,27 +189,72 @@ struct ku_pte* set_process(const int pid){
     page* PD = get_free_page(1);
     if(PD==NULL){
         // todo: get busy page
+        return NULL;
     }
     ((PCB*)iter)->PD_BR = PD;
     ((PCB*)iter)->next = NULL;
-    ((PCB*)iter)->program_counter = program_counter;
-    program_counter++;
 
     return PD->p_mem;
 }
-
 int ku_run_proc (char pid,
-                 struct ku_pte **ku_cr3){
-    *ku_cr3 = set_process(pid);
+                 void** ku_cr3){
+    *ku_cr3 = make_PCB_return_PD_BR(pid);
+
     if(*ku_cr3 == NULL){
         return -1;
     }
     return 0;
 }
+void* page_to_swap_space(page* parent_page, int index){
+    page* page_to_swap = parent_page->p_mem[index];
+    char pte_to_swap = parent_page->kuPte[index];
 
-PCB* get_pcb(int pid){
+    char swap_offset = pte_to_swap >> 1;
+
+    ku_mmu_Swap_Space_array[swap_offset] = page_to_swap;
+
+    parent_page->kuPte[index] &= SET_INVALID;
+
+    return page_to_swap;
+}
+
+void* page_from_swap_space(char pte_to_return){
+    page* page_to_return = NULL;
+
+    char return_offset = pte_to_return >> 1;
+
+    page_to_return = ku_mmu_Swap_Space_array[return_offset];
+
+    for(int i = 0;i<4;i++){
+        if(page_to_return == ((page*)(page_to_return->parent))->p_mem[i]){
+            ((page*)(page_to_return->parent))->kuPte[i] &= SET_VALID;
+            break;
+        }
+    }
+    return page_to_return;
+}
+
+page* get_busy_page(char pte){
+    page* busy_page = NULL;
+    if(ku_mmu_busy_list){
+        busy_page = ku_mmu_busy_list;
+        ku_mmu_free_list = busy_page->next;
+
+        for(int i = 0;i<4;i++) {
+            if (busy_page == ((page *) (busy_page->parent))->p_mem[i]) {
+                page_to_swap_space(busy_page->parent,i);
+                busy_page = page_from_swap_space(pte);
+                break;
+            }
+        }
+    }
+    return busy_page;
+}
+
+
+PCB* get_pcb(const int pid){
     PCB * iter = ku_mmu_PCBs;
-    while(iter->next = NULL){
+    while(iter->next == NULL){
         if(iter->pid == pid){
             return iter;
         }
@@ -195,7 +263,7 @@ PCB* get_pcb(int pid){
     return NULL;
 }
 
-void* allocate_page(int pid, int VirAdd){
+void* allocate_page(const int pid, const int VirAdd){
     int pd_num = get_PD_num(VirAdd);
     int pmd_num = get_PMD_num(VirAdd);
     int pt_num = get_PT_num(VirAdd);
@@ -203,76 +271,78 @@ void* allocate_page(int pid, int VirAdd){
 
     PCB* pcb = get_pcb(pid);
 
-    int* pde = (int*)((pcb->PD_BR)->p_mem)+pd_num;
-// todo: distinguish page, pte and pfn
-    int* pfn = NULL;
+    page* PD;
+    page* PMD;
+    page* PT;
+    page* pfn;
 
-    int* p_mde = (int*)(pde)+pmd_num;
-    if(p_mde == NULL){
-        p_mde = get_free_page(1);
-        if(p_mde == NULL){
-            return NULL;
-        }
-    }
-    int* pte = (int*)(p_mde)+pt_num;
-    if(pte == NULL){
-        pte = get_free_page(1);
-        if(pte==NULL){
-            return NULL;
-        }
-        *(int*)(((page*)pte)->p_mem) |= PRESENT;
-        pfn = (int*)(pte)+offset;
+    char p_de;
+    char pm_de;
+    char p_te;
+
+    PD = (pcb->PD_BR);
+    p_de = (PD->kuPte[pd_num]);
+    // todo check if it used
+    if(p_de & PRESENT){
+        PMD = (page*)(PD->p_mem[pd_num]);
+    }else if(p_de ==  ZERO){
+        page* newPage = get_free_page(1);
+        (PD->p_mem[pd_num]) = newPage;
+        PMD = newPage;
+        PMD->parent = PD;
+        PD->kuPte[pd_num] |= PRESENT;
     }else{
-        if(*(int*)(((page*)pte)->p_mem) & PRESENT){
-            pfn = (int*)(pte)+offset;
-        }else{
-            // todo: get page from swap_space;
-        }
+        // todo: get page from swap space
     }
-    return pfn;
-}
-page* get_busy_page(){
-    page* busy_page = NULL;
-    if(ku_mmu_busy_list){
-        busy_page = ku_mmu_busy_list;
-        ku_mmu_free_list = busy_page->next;
-    }
-    return busy_page;
-}
-page* set_swap_page(int pid, int VirAdd){
 
+    pm_de = PMD->kuPte[pmd_num];
+    if(pm_de & PRESENT){
+        PT = (page*)(PMD->p_mem[pmd_num]);
+    }else if(pm_de == ZERO){
+        page* newPage = get_free_page(1);
+        (PMD->p_mem[pmd_num])=newPage;
+        PT = newPage;
+        PT->parent = PMD;
+        PMD->kuPte[pmd_num] |= PRESENT;
+    }else{
+        // todo: get page from swap space
+    }
+
+    p_te = PT->kuPte[pt_num];
+    if(p_te & PRESENT){
+        pfn = (page*)(PT->p_mem[pt_num]);
+    }else if(pm_de == ZERO){
+        page* newPage = get_free_page(0);
+        (PT->p_mem[pt_num])=newPage;
+        pfn = newPage;
+        pfn->parent = PT;
+        PT->kuPte[pt_num] |= PRESENT;
+    }else{
+        get_busy_page(p_te);
+    }
+    return pfn->p_mem[offset];
 }
 
 int ku_page_fault (char pid ,
                    char va){
-// todo : va 자리에 1) 차지하고 있는 애를 스왑 스페이스로 내쫓고, 자리 내주기 2) 또 자리가 없으면 그냥 0
-    int result =  allocate_page(pid,va);
-
-
+    void* result =  allocate_page(pid,va);
+    if(result == NULL){
+        return -1;
+    }else{
+        return 0;
+    }
 }
 int ku_traverse(void *, char, void *);
 
 
-void destroy_free_list(){
-    page* iter =ku_mmu_free_list;
+void destroy_pfn_list(){
+    page* iter =ku_mmu_pfn;
     page* formal = NULL;
     while(iter){
         formal = iter;
         iter = iter+1;
-        if(formal){
-            free(formal);
-        }
-    }
-}
-void destroy_busy_list(){
-    page* iter =ku_mmu_busy_list;
-    page* formal = NULL;
-    while(iter){
-        formal = iter;
-        iter = iter->next;
-        if(formal){
-            free(formal);
-        }
+        free(formal);
+
     }
 }
 void destroy_swap_list(){
@@ -281,9 +351,7 @@ void destroy_swap_list(){
     while(iter){
         formal = iter;
         iter = iter->next;
-        if(formal){
-            free(formal);
-        }
+        free(formal);
     }
 }
 void destroy_PCB_list(){
@@ -292,9 +360,7 @@ void destroy_PCB_list(){
     while(iter){
         formal = iter;
         iter = iter->next;
-        if(formal){
-            free(formal);
-        }
+        free(formal);
     }
 }
 

@@ -6,8 +6,8 @@ void ku_mmu_fin(FILE *fd, void *pmem)
 {
     if(fd) fclose(fd);
     if(pmem) free(pmem);
-    destroy_free_list();
-    destroy_busy_list();
+    if(ku_mmu_Swap_Space_array) free(ku_mmu_Swap_Space_array);
+    destroy_pfn_list();
     destroy_swap_list();
     destroy_PCB_list();
 }
