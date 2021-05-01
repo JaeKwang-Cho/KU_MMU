@@ -6,10 +6,10 @@ void ku_mmu_fin(FILE *fd, void *pmem)
 {
     if(fd) fclose(fd);
     if(pmem) free(pmem);
-    if(ku_mmu_Swap_Space_array) free(ku_mmu_Swap_Space_array);
-    destroy_pfn_list();
-    destroy_swap_list();
-    destroy_PCB_list();
+    //if(ku_mmu_Swap_Space_array) free(ku_mmu_Swap_Space_array);
+    //destroy_pfn_list();
+    //destroy_swap_list();
+    //destroy_PCB_list();
 }
 
 int main(int argc, char *argv[])

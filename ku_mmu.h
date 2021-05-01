@@ -16,6 +16,8 @@
 #define GET_OFFSET (0b00000011)
 
 #include <memory.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 /* 구조체 */
 typedef struct page{
@@ -72,6 +74,7 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
     ku_mmu_pfn = malloc(sizeof(page));
     if(ku_mmu_pfn == NULL){
         return NULL;
+
     }
     ku_mmu_free_list = ku_mmu_pfn;
     page* iter = ku_mmu_pfn;
@@ -79,13 +82,19 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
     for(int i = 0;i<4;i++){
         iter->kuPte[i] &= ZERO;
     }
+    iter->p_mem = malloc(sizeof(int*)*4);
+    if(iter->p_mem == NULL){
+        return NULL;
+    }
     *(iter->p_mem) = p_mem;
     iter->parent = NULL;
     iter->next = NULL;
 
+
     page_num--;
     if(page_num > 1){
         for(int i = 0;i<page_num;i++){
+
             iter->next = malloc(sizeof (page));
             iter = iter->next;
             if(iter==NULL){
@@ -94,10 +103,13 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
             for(int j = 0;j<4;j++){
                 iter->kuPte[j] &= ZERO;
             }
+            iter->p_mem = malloc(sizeof(int*)*4);
             *(iter->p_mem) = (((int*)p_mem) + i);
             iter->parent = NULL;
             iter->next = NULL;
+            iter->p_mem = malloc(sizeof(page*)*4);
         }
+
         return ku_mmu_pfn;
     }
     else{
@@ -118,7 +130,9 @@ void* ku_make_swap_space(void* p_mem,unsigned int  p_mem_size,unsigned  int swap
     for(int i = 0;i<4;i++){
         iter->kuPte[i] &= ZERO;
     }
+    iter->p_mem=malloc(sizeof(int*)*4);
     *(iter->p_mem)= p_swap_start_mem;
+
     iter->parent = NULL;
     iter->next = NULL;
     swap_num--;
@@ -132,6 +146,8 @@ void* ku_make_swap_space(void* p_mem,unsigned int  p_mem_size,unsigned  int swap
             for(int j = 0;j<4;j++){
                 iter->kuPte[j] &= ZERO;
             }
+
+            iter->p_mem=malloc(sizeof(int*)*4);
             *(iter->p_mem) = (((int*)p_swap_start_mem) + i);
             iter->parent = NULL;
             iter->next = NULL;
@@ -144,7 +160,7 @@ void* ku_make_swap_space(void* p_mem,unsigned int  p_mem_size,unsigned  int swap
 }
 
 void* ku_mmu_init (unsigned int mem_size ,
-                  unsigned int swap_size){
+                   unsigned int swap_size){
     unsigned int total_size = sizeof(char)*(mem_size + swap_size);
     void* p_mem = malloc(total_size);
     if(p_mem == NULL){
@@ -179,11 +195,11 @@ void add_page_busy_list(page* const busy_page, const int isTable){
         if(!ku_mmu_busy_list){
             busy_page->next=NULL;
             ku_mmu_busy_list = busy_page;
-            last_page = ku_mmu_busy_list;
+            last_page = busy_page;
         }else{
             busy_page->next =NULL;
-            last_page->next = busy_page;
             last_page = busy_page;
+            ku_mmu_busy_list= busy_page;
         }
     }
 }
@@ -204,19 +220,25 @@ void* make_PCB_return_PD_BR(const int pid){
     PCB * iter = ku_mmu_PCBs;
     while(iter != NULL){
         if(iter->pid == pid){
-            return iter->PD_BR->p_mem;
+            return *(iter->PD_BR->p_mem);
         }
         iter = iter->next;
     }
     iter = malloc(sizeof(PCB));
-    ((PCB*)iter)->pid = pid;
+    if(iter == NULL){
+        return NULL;
+    }
+    iter->pid = pid;
     page* PD = get_free_page(1);
     if(PD==NULL){
         return NULL;
     }
-    ((PCB*)iter)->PD_BR = PD;
-    ((PCB*)iter)->next = NULL;
+    iter->PD_BR = PD;
+    iter->next = NULL;
 
+    if(ku_mmu_PCBs == NULL){
+        ku_mmu_PCBs = iter;
+    }
     return *(PD->p_mem);
 }
 int ku_run_proc (char pid,
@@ -277,8 +299,9 @@ page* get_busy_page(char pte){
 }
 
 PCB* get_pcb(const int pid){
+
     PCB * iter = ku_mmu_PCBs;
-    while(iter->next == NULL){
+    while(iter != NULL){
         if(iter->pid == pid){
             return iter;
         }
@@ -347,14 +370,16 @@ void* allocate_page(const int pid, const int VirAdd){
         pfn->parent = PT;
         PT->kuPte[pt_num] |= PRESENT;
     }else{
+
         pfn = get_busy_page(p_te);
     }
-    return pfn->p_mem[offset];
+    return pfn;
 }
 
 int ku_page_fault (char pid ,
                    char va){
     void* result =  allocate_page(pid,va);
+
     if(result == NULL){
         return -1;
     }else{
