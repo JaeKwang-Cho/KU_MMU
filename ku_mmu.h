@@ -33,11 +33,9 @@ typedef struct PCB{
     void* next;
 }PCB;
 
-/* 전역 변수 */
+/* 전역변수 */
 void* ku_mmu_pfn = NULL;
-void* ku_mmu_swap_space = NULL;
-
-page** ku_mmu_Swap_Space_array = NULL;
+page** ku_mmu_swap_space = NULL;
 
 void* ku_mmu_free_list = NULL;
 void* ku_mmu_busy_list = NULL;
@@ -84,7 +82,7 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
     }
     iter->p_mem = malloc(sizeof(int*)*4);
     if(iter->p_mem == NULL){
-        return NULL;
+    	return NULL;
     }
     *(iter->p_mem) = p_mem;
     iter->parent = NULL;
@@ -95,97 +93,70 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
     if(page_num > 1){
         for(int i = 0;i<page_num;i++){
 
-            iter->next = malloc(sizeof (page));
+		iter->next = malloc(sizeof (page));
             iter = iter->next;
             if(iter==NULL){
                 return NULL;
             }
             for(int j = 0;j<4;j++){
                 iter->kuPte[j] &= ZERO;
-            }
-            iter->p_mem = malloc(sizeof(int*)*4);
+	    }
+     	    iter->p_mem = malloc(sizeof(int*)*4);
             *(iter->p_mem) = (((int*)p_mem) + i);
             iter->parent = NULL;
             iter->next = NULL;
-            iter->p_mem = malloc(sizeof(page*)*4);
+     	    iter->p_mem = malloc(sizeof(page*)*4);
         }
 
-        return ku_mmu_pfn;
+	return ku_mmu_pfn;
     }
     else{
         return ku_mmu_pfn;
     }
 }
-void* ku_make_swap_space(void* p_mem,unsigned int  p_mem_size,unsigned  int swap_size){
+void* ku_make_swap_space(unsigned  int swap_size){
     unsigned int swap_num = swap_size/4;
 
-    ku_mmu_swap_space = malloc(sizeof(page));
+    ku_mmu_swap_space = malloc(sizeof(page*)*swap_num);
     if(ku_mmu_swap_space == NULL){
         return NULL;
     }
-    page* iter = ku_mmu_swap_space;
-
-    void* p_swap_start_mem = ((char*)p_mem)+p_mem_size;
-
-    for(int i = 0;i<4;i++){
-        iter->kuPte[i] &= ZERO;
-    }
-    iter->p_mem=malloc(sizeof(int*)*4);
-    *(iter->p_mem)= p_swap_start_mem;
-
-    iter->parent = NULL;
-    iter->next = NULL;
-    swap_num--;
-    if(swap_num > 1){
-        for(int i = 0;i<swap_num;i++){
-            iter->next = malloc(sizeof (page));
-            iter = iter->next;
-            if(iter==NULL){
-                return NULL;
-            }
-            for(int j = 0;j<4;j++){
-                iter->kuPte[j] &= ZERO;
-            }
-
-            iter->p_mem=malloc(sizeof(int*)*4);
-            *(iter->p_mem) = (((int*)p_swap_start_mem) + i);
-            iter->parent = NULL;
-            iter->next = NULL;
+    for(int i =0;i<swap_num;i++){
+        *(ku_mmu_swap_space+i) = malloc(sizeof(page));
+        for(int j = 0;j<4;j++){
+            (*(ku_mmu_swap_space+i))->kuPte[j] &= ZERO;
         }
-        return ku_mmu_swap_space;
+        (*(ku_mmu_swap_space+i))->p_mem=malloc(sizeof(int*)*4);
+        *((*(ku_mmu_swap_space+i))->p_mem)=((int*)(ku_mmu_swap_space))+i;
+        (*(ku_mmu_swap_space+i))->parent = NULL;
+        (*(ku_mmu_swap_space+i))->next = NULL;
     }
-    else{
-        return ku_mmu_swap_space;
-    }
+    return ku_mmu_swap_space;
+
 }
 
 void* ku_mmu_init (unsigned int mem_size ,
-                   unsigned int swap_size){
-    unsigned int total_size = sizeof(char)*(mem_size + swap_size);
-    void* p_mem = malloc(total_size);
+                  unsigned int swap_size){
+    void* p_mem = malloc(mem_size);
     if(p_mem == NULL){
         return NULL;
     }
 
-    ku_mmu_free_list = ku_make_pfn_list(p_mem,mem_size);
-    if(ku_mmu_free_list == NULL){
+    ku_mmu_pfn = ku_make_pfn_list(p_mem,mem_size);
+    if(ku_mmu_pfn == NULL){
         return NULL;
     }
-    ku_mmu_busy_list = ku_make_swap_space(p_mem,mem_size,swap_size);
-    if(ku_mmu_busy_list == NULL){
-        return NULL;
-    }
-    ku_mmu_Swap_Space_array = malloc(sizeof(page*)*swap_size);
-    if(ku_mmu_Swap_Space_array == NULL){
+    ku_mmu_swap_space = ku_make_swap_space(swap_size);
+    if(ku_mmu_swap_space == NULL){
         return NULL;
     }
 
-    memset(p_mem,ZERO,total_size);
+    memset(p_mem,ZERO,mem_size);
 
     return p_mem;
 }
 
-/* 프로세스 준비(생성) */
+/* 프로세스 선택(생성) */
 void add_page_busy_list(page* const busy_page, const int isTable){
     static page* last_page = NULL;
     if(isTable == 1){
@@ -199,7 +170,7 @@ void add_page_busy_list(page* const busy_page, const int isTable){
         }else{
             busy_page->next =NULL;
             last_page = busy_page;
-            ku_mmu_busy_list= busy_page;
+	    ku_mmu_busy_list= busy_page;
         }
     }
 }
@@ -220,13 +191,13 @@ void* make_PCB_return_PD_BR(const int pid){
     PCB * iter = ku_mmu_PCBs;
     while(iter != NULL){
         if(iter->pid == pid){
-            return *(iter->PD_BR->p_mem);
-        }
+        	return *(iter->PD_BR->p_mem);
+	}
         iter = iter->next;
     }
     iter = malloc(sizeof(PCB));
     if(iter == NULL){
-        return NULL;
+    	return NULL;
     }
     iter->pid = pid;
     page* PD = get_free_page(1);
@@ -237,7 +208,7 @@ void* make_PCB_return_PD_BR(const int pid){
     iter->next = NULL;
 
     if(ku_mmu_PCBs == NULL){
-        ku_mmu_PCBs = iter;
+    	ku_mmu_PCBs = iter;
     }
     return *(PD->p_mem);
 }
@@ -251,14 +222,14 @@ int ku_run_proc (char pid,
     return 0;
 }
 
-/* 프로세스 자원 할당 */
+/* 프로세스 메모리 할당 */
 void* page_to_swap_space(page* parent_page, int index){
     page* page_to_swap = *((parent_page->p_mem)+index);
     char pte_to_swap = parent_page->kuPte[index];
 
     char swap_offset = pte_to_swap >> 1;
 
-    ku_mmu_Swap_Space_array[swap_offset] = page_to_swap;
+    ku_mmu_swap_space[swap_offset] = page_to_swap;
 
     parent_page->kuPte[index] &= SET_INVALID;
 
@@ -270,7 +241,7 @@ void* page_from_swap_space(char pte_to_return){
 
     char return_offset = pte_to_return >> 1;
 
-    page_to_return = ku_mmu_Swap_Space_array[return_offset];
+    page_to_return = ku_mmu_swap_space[return_offset];
 
     for(int i = 0;i<4;i++){
         if(page_to_return ==  *(((page**)((page*)page_to_return->parent)->p_mem)+i)){
@@ -371,7 +342,7 @@ void* allocate_page(const int pid, const int VirAdd){
         PT->kuPte[pt_num] |= PRESENT;
     }else{
 
-        pfn = get_busy_page(p_te);
+	    pfn = get_busy_page(p_te);
     }
     return pfn;
 }
@@ -389,34 +360,6 @@ int ku_page_fault (char pid ,
 int ku_traverse(void *, char, void *);
 
 
-void destroy_pfn_list(){
-    page* iter =ku_mmu_pfn;
-    page* formal = NULL;
-    while(iter){
-        formal = iter;
-        iter = iter+1;
-        free(formal);
-
-    }
-}
-void destroy_swap_list(){
-    page* iter =ku_mmu_swap_space;
-    page* formal = NULL;
-    while(iter){
-        formal = iter;
-        iter = iter->next;
-        free(formal);
-    }
-}
-void destroy_PCB_list(){
-    page* iter =ku_mmu_PCBs;
-    page* formal = NULL;
-    while(iter){
-        formal = iter;
-        iter = iter->next;
-        free(formal);
-    }
-}
 
 #endif //KU_MMU_KU_MMU_H
 
