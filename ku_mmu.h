@@ -285,27 +285,23 @@ void* allocate_page(const int pid, const int VirAdd){
     // todo check if it used
     if(p_de & PRESENT){
         PMD = (page*)(PD->p_mem[pd_num]);
-    }else if(p_de ==  ZERO){
+    }else{
         page* newPage = get_free_page(1);
         (PD->p_mem[pd_num]) = newPage;
         PMD = newPage;
         PMD->parent = PD;
         PD->kuPte[pd_num] |= PRESENT;
-    }else{
-        // todo: get page from swap space
     }
 
     pm_de = PMD->kuPte[pmd_num];
     if(pm_de & PRESENT){
         PT = (page*)(PMD->p_mem[pmd_num]);
-    }else if(pm_de == ZERO){
+    }else{
         page* newPage = get_free_page(1);
         (PMD->p_mem[pmd_num])=newPage;
         PT = newPage;
         PT->parent = PMD;
         PMD->kuPte[pmd_num] |= PRESENT;
-    }else{
-        // todo: get page from swap space
     }
 
     p_te = PT->kuPte[pt_num];
@@ -318,7 +314,7 @@ void* allocate_page(const int pid, const int VirAdd){
         pfn->parent = PT;
         PT->kuPte[pt_num] |= PRESENT;
     }else{
-        get_busy_page(p_te);
+        pfn = get_busy_page(p_te);
     }
     return pfn->p_mem[offset];
 }
