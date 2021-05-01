@@ -5,6 +5,7 @@
 #ifndef KU_MMU_KU_MMU_H
 #define KU_MMU_KU_MMU_H
 
+/* flags */
 #define ZERO (0b00000000)
 #define PRESENT (0b00000010)
 #define SET_INVALID (0b11111110)
@@ -16,10 +17,11 @@
 
 #include <memory.h>
 
+/* structures */
 typedef struct page{
     void* next;
     char kuPte[4];
-    void* p_mem[4];
+    void** p_mem;
     void* parent;
 }page;
 
@@ -29,6 +31,7 @@ typedef struct PCB{
     void* next;
 }PCB;
 
+/* global variable */
 void* ku_mmu_pfn = NULL;
 void* ku_mmu_swap_space = NULL;
 
@@ -40,7 +43,7 @@ void* ku_mmu_busy_list = NULL;
 void* ku_mmu_PCBs = NULL;
 
 
-
+/* get offset */
 int get_PD_num(const int VirAdd){
     int pd_num = GET_PD & VirAdd;
     pd_num = pd_num >> 6;
@@ -62,7 +65,7 @@ int get_offset_num(const int VirAdd){
 }
 
 
-// todo: ku_make_swap_space(p_mem,mem_size);
+/* 초기화 */
 
 void ku_make_pfn_list(const void* p_mem,const unsigned int  p_mem_size){
     unsigned int page_num = p_mem_size/4;
@@ -73,8 +76,8 @@ void ku_make_pfn_list(const void* p_mem,const unsigned int  p_mem_size){
 
     for(int i = 0;i<4;i++){
         iter->kuPte[i] &= ZERO;
-        iter->p_mem[i] = ((char*)p_mem)+i;
     }
+    *(iter->p_mem) = ((char*)p_mem);
     iter->parent = NULL;
     iter->next = NULL;
 
@@ -85,8 +88,8 @@ void ku_make_pfn_list(const void* p_mem,const unsigned int  p_mem_size){
             iter = iter->next;
             for(int j = 0;j<4;j++){
                 iter->kuPte[j] &= ZERO;
-                iter->p_mem[j] = (char*)(((int*)p_mem) + i)+j;
             }
+            *(iter->p_mem) = (((int*)p_mem) + i);
             iter->parent = NULL;
             iter->next = NULL;
         }
@@ -105,8 +108,8 @@ void ku_make_swap_space(void* p_mem,unsigned int  p_mem_size,unsigned  int swap_
 
     for(int i = 0;i<4;i++){
         iter->kuPte[i] &= ZERO;
-        iter->p_mem[i]= p_swap_start_mem+i;
     }
+    *(iter->p_mem)= p_swap_start_mem;
     iter->parent = NULL;
     iter->next = NULL;
     swap_num--;
@@ -116,8 +119,8 @@ void ku_make_swap_space(void* p_mem,unsigned int  p_mem_size,unsigned  int swap_
             iter = iter->next;
             for(int j = 0;j<4;j++){
                 iter->kuPte[j] &= ZERO;
-                iter->p_mem[j] = (char*)(((int*)p_swap_start_mem) + i)+j;
             }
+            *(iter->p_mem) = (((int*)p_swap_start_mem) + i);
             iter->parent = NULL;
             iter->next = NULL;
         }
@@ -146,6 +149,7 @@ void* ku_mmu_init (unsigned int mem_size ,
     return p_mem;
 }
 
+/* 프로세스 준비(생성) */
 void add_page_busy_list(page* const busy_page, const int isTable){
     static page* last_page = NULL;
     if(isTable == 1){
@@ -205,8 +209,10 @@ int ku_run_proc (char pid,
     }
     return 0;
 }
+
+/* 프로세스 자원 할당 */
 void* page_to_swap_space(page* parent_page, int index){
-    page* page_to_swap = parent_page->p_mem[index];
+    page* page_to_swap = *((parent_page->p_mem)+index);
     char pte_to_swap = parent_page->kuPte[index];
 
     char swap_offset = pte_to_swap >> 1;
@@ -226,7 +232,7 @@ void* page_from_swap_space(char pte_to_return){
     page_to_return = ku_mmu_Swap_Space_array[return_offset];
 
     for(int i = 0;i<4;i++){
-        if(page_to_return == ((page*)(page_to_return->parent))->p_mem[i]){
+        if(page_to_return ==  *(((page**)((page*)page_to_return->parent)->p_mem)+i)){
             ((page*)(page_to_return->parent))->kuPte[i] &= SET_VALID;
             break;
         }
@@ -241,7 +247,7 @@ page* get_busy_page(char pte){
         ku_mmu_free_list = busy_page->next;
 
         for(int i = 0;i<4;i++) {
-            if (busy_page == ((page *) (busy_page->parent))->p_mem[i]) {
+            if (busy_page == *(((page**)((page*)busy_page->parent)->p_mem)+i)) {
                 page_to_swap_space(busy_page->parent,i);
                 busy_page = page_from_swap_space(pte);
                 break;
@@ -284,10 +290,13 @@ void* allocate_page(const int pid, const int VirAdd){
     p_de = (PD->kuPte[pd_num]);
     // todo check if it used
     if(p_de & PRESENT){
-        PMD = (page*)(PD->p_mem[pd_num]);
+        PMD = (page*)*((page**)(PD->p_mem + pd_num));
     }else{
         page* newPage = get_free_page(1);
-        (PD->p_mem[pd_num]) = newPage;
+        if(newPage == NULL){
+            return NULL;
+        }
+        *((page**)(PD->p_mem)+pd_num) = newPage;
         PMD = newPage;
         PMD->parent = PD;
         PD->kuPte[pd_num] |= PRESENT;
@@ -295,10 +304,13 @@ void* allocate_page(const int pid, const int VirAdd){
 
     pm_de = PMD->kuPte[pmd_num];
     if(pm_de & PRESENT){
-        PT = (page*)(PMD->p_mem[pmd_num]);
+        PT = (page*)*((page**)(PMD->p_mem + pmd_num));
     }else{
         page* newPage = get_free_page(1);
-        (PMD->p_mem[pmd_num])=newPage;
+        if(newPage == NULL){
+            return NULL;
+        }
+        *((page**)(PMD->p_mem)+pmd_num) = newPage;
         PT = newPage;
         PT->parent = PMD;
         PMD->kuPte[pmd_num] |= PRESENT;
@@ -306,10 +318,13 @@ void* allocate_page(const int pid, const int VirAdd){
 
     p_te = PT->kuPte[pt_num];
     if(p_te & PRESENT){
-        pfn = (page*)(PT->p_mem[pt_num]);
+        pfn = (page*)*((page**)(PT->p_mem + pt_num));
     }else if(pm_de == ZERO){
         page* newPage = get_free_page(0);
-        (PT->p_mem[pt_num])=newPage;
+        if(newPage == NULL){
+            return NULL;
+        }
+        *((page**)(PT->p_mem)+pt_num) = newPage;
         pfn = newPage;
         pfn->parent = PT;
         PT->kuPte[pt_num] |= PRESENT;
