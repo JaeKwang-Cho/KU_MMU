@@ -105,7 +105,6 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
             *(iter->p_mem) = (((int*)p_mem) + i);
             iter->parent = NULL;
             iter->next = NULL;
-     	    iter->p_mem = malloc(sizeof(page*)*4);
         }
 
 	return ku_mmu_pfn;
