@@ -20,9 +20,23 @@
 #include <stdio.h>
 
 /* 구조체 */
+typedef union pte{
+    char pte_val;
+    struct{
+        char b0 : 1;
+        char b1 : 1;
+        char b2 : 1;
+        char b3 : 1;
+        char b4 : 1;
+        char b5 : 1;
+        char b6 : 1;
+        char b7 : 1;
+    }bits;
+}pte;
+
 typedef struct page{
     void* next;
-    char kuPte[4];
+    pte kuPte[4];
     void** p_mem;
     void* parent;
 }page;
@@ -72,13 +86,12 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
     ku_mmu_pfn = malloc(sizeof(page));
     if(ku_mmu_pfn == NULL){
         return NULL;
-
     }
     ku_mmu_free_list = ku_mmu_pfn;
     page* iter = ku_mmu_pfn;
 
     for(int i = 0;i<4;i++){
-        iter->kuPte[i] &= ZERO;
+        iter->kuPte[i].pte_val &= ZERO;
     }
     iter->p_mem = malloc(sizeof(int*)*4);
     if(iter->p_mem == NULL){
@@ -99,8 +112,8 @@ void* ku_make_pfn_list(void* const p_mem,const unsigned int  p_mem_size){
                 return NULL;
             }
             for(int j = 0;j<4;j++){
-                iter->kuPte[j] &= ZERO;
-	    }
+                iter->kuPte[j].pte_val &= ZERO;
+	        }
      	    iter->p_mem = malloc(sizeof(int*)*4);
             *(iter->p_mem) = (((int*)p_mem) + i);
             iter->parent = NULL;
@@ -123,7 +136,7 @@ void* ku_make_swap_space(unsigned  int swap_size){
     for(int i =0;i<swap_num;i++){
         *(ku_mmu_swap_space+i) = malloc(sizeof(page));
         for(int j = 0;j<4;j++){
-            (*(ku_mmu_swap_space+i))->kuPte[j] &= ZERO;
+            (*(ku_mmu_swap_space+i))->kuPte[j].pte_val &= ZERO;
         }
         (*(ku_mmu_swap_space+i))->p_mem=malloc(sizeof(int*)*4);
         *((*(ku_mmu_swap_space+i))->p_mem)=((int*)(ku_mmu_swap_space))+i;
@@ -224,13 +237,13 @@ int ku_run_proc (char pid,
 /* 프로세스 메모리 할당 */
 void* page_to_swap_space(page* parent_page, int index){
     page* page_to_swap = *((parent_page->p_mem)+index);
-    char pte_to_swap = parent_page->kuPte[index];
+    char pte_to_swap = parent_page->kuPte[index].pte_val;
 
     char swap_offset = pte_to_swap >> 1;
 
     ku_mmu_swap_space[swap_offset] = page_to_swap;
 
-    parent_page->kuPte[index] &= SET_INVALID;
+    parent_page->kuPte[index].pte_val &= SET_INVALID;
 
     return page_to_swap;
 }
@@ -244,7 +257,7 @@ void* page_from_swap_space(char pte_to_return){
 
     for(int i = 0;i<4;i++){
         if(page_to_return ==  *(((page**)((page*)page_to_return->parent)->p_mem)+i)){
-            ((page*)(page_to_return->parent))->kuPte[i] &= SET_VALID;
+            ((page*)(page_to_return->parent))->kuPte[i].pte_val &= SET_VALID;
             break;
         }
     }
@@ -298,7 +311,7 @@ void* allocate_page(const int pid, const int VirAdd){
     char p_te;
 
     PD = (pcb->PD_BR);
-    p_de = (PD->kuPte[pd_num]);
+    p_de = (PD->kuPte[pd_num].pte_val);
 
     if(p_de & PRESENT){
         PMD = (page*)*((page**)(PD->p_mem + pd_num));
@@ -310,10 +323,10 @@ void* allocate_page(const int pid, const int VirAdd){
         *((page**)(PD->p_mem)+pd_num) = newPage;
         PMD = newPage;
         PMD->parent = PD;
-        PD->kuPte[pd_num] |= PRESENT;
+        PD->kuPte[pd_num].pte_val |= PRESENT;
     }
 
-    pm_de = PMD->kuPte[pmd_num];
+    pm_de = PMD->kuPte[pmd_num].pte_val;
     if(pm_de & PRESENT){
         PT = (page*)*((page**)(PMD->p_mem + pmd_num));
     }else{
@@ -324,10 +337,10 @@ void* allocate_page(const int pid, const int VirAdd){
         *((page**)(PMD->p_mem)+pmd_num) = newPage;
         PT = newPage;
         PT->parent = PMD;
-        PMD->kuPte[pmd_num] |= PRESENT;
+        PMD->kuPte[pmd_num].pte_val |= PRESENT;
     }
 
-    p_te = PT->kuPte[pt_num];
+    p_te = PT->kuPte[pt_num].pte_val;
     if(p_te & PRESENT){
         pfn = (page*)*((page**)(PT->p_mem + pt_num));
     }else if(pm_de == ZERO){
@@ -338,7 +351,7 @@ void* allocate_page(const int pid, const int VirAdd){
         *((page**)(PT->p_mem)+pt_num) = newPage;
         pfn = newPage;
         pfn->parent = PT;
-        PT->kuPte[pt_num] |= PRESENT;
+        PT->kuPte[pt_num].pte_val |= PRESENT;
     }else{
 
 	    pfn = get_busy_page(p_te);
