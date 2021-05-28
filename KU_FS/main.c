@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
-#include <math.h>
 
 #define BLOCK_SIZE (4096)
-#define BIT8(n)  unsgined char b##n
 
 
 typedef union fileEntry {
@@ -50,7 +48,7 @@ typedef struct root_block {
     fileEntry entries[1024];
 } root_block;
 
-
+block *partition;
 block *super_blocks;
 block *i_bmap_blocks;
 block *d_bmap_blocks;
@@ -63,17 +61,14 @@ unsigned int usedDataBlock = 56;
 unsigned int rootOffset = 1;
 
 void initPartition() {
-    super_blocks = (block *) malloc(sizeof(block));
-    i_bmap_blocks = (block *) malloc(sizeof(block));
-    d_bmap_blocks = (block *) malloc(sizeof(block));
-    inode_blocks = (inode *) malloc(sizeof(block) * 5);
-    data_blocks = (block *) malloc(sizeof(block) * 56);
+    partition = (block *) malloc(sizeof(block) * 64);
+    super_blocks = partition;
+    i_bmap_blocks = partition + 1;
+    d_bmap_blocks = partition + 2;
+    inode_blocks = partition + 3;
+    data_blocks = partition + 8;
 
-    memset(super_blocks, 0, sizeof(block));
-    memset(i_bmap_blocks, 0, sizeof(block));
-    memset(d_bmap_blocks, 0, sizeof(block));
-    memset(inode_blocks, 0, sizeof(block) * 5);
-    memset(data_blocks, 0, sizeof(block) * 56);
+    memset(partition, 0, sizeof(block) * 64);
 
     byteLine *pointer = (byteLine *) i_bmap_blocks;
     (*pointer).b7 = 1;
@@ -87,25 +82,25 @@ void initPartition() {
     inode_blocks[0].blocks = 1;
     inode_blocks[0].pointer[0] = 0;
 
-    rootBlock = *(root_block *)&data_blocks[0];
+    rootBlock = *(root_block *) &data_blocks[0];
 }
 
 int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) {
     byteLine *mapPoint = (byteLine *) bmap;
     unsigned int remain = 0;
     int lineOffset = 8;
-    if (data_pointer != NULL){
-       // printf("d_bmap check\n");
-    }else{
-       // printf("i_bmap check\n");
+    if (data_pointer != NULL) {
+        // printf("d_bmap check\n");
+    } else {
+        // printf("i_bmap check\n");
     }
     for (int i = 0; i < 10; i++) {
         if (mapPoint[i].b7 == 0) {
             mapPoint[i].b7 = 1;
-          //  printf("i is %d\n",i);
-          //  printf("b7 check mapPoint[i] = %X\n",mapPoint[i].val);
+            //  printf("i is %d\n",i);
+            //  printf("b7 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-          //      printf("new data_block offset: %d\n",lineOffset * i);
+                //      printf("new data_block offset: %d\n",lineOffset * i);
                 data_pointer[remain] = lineOffset * i;
             }
             remain++;
@@ -115,10 +110,10 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
         }
         if (mapPoint[i].b6 == 0) {
             mapPoint[i].b6 = 1;
-         //   printf("i is %d\n",i);
-          //  printf("b6 check mapPoint[i] = %X\n",mapPoint[i].val);
+            //   printf("i is %d\n",i);
+            //  printf("b6 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-           //     printf("new data_block offset: %d\n",lineOffset * i + 1);
+                //     printf("new data_block offset: %d\n",lineOffset * i + 1);
                 data_pointer[remain] = lineOffset * i + 1;
             }
             remain++;
@@ -128,10 +123,10 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
         }
         if (mapPoint[i].b5 == 0) {
             mapPoint[i].b5 = 1;
-          //  printf("i is %d\n",i);
-          //  printf("b5 check mapPoint[i] = %X\n",mapPoint[i].val);
+            //  printf("i is %d\n",i);
+            //  printf("b5 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-          //      printf("new data_block offset: %d\n",lineOffset * i + 2);
+                //      printf("new data_block offset: %d\n",lineOffset * i + 2);
                 data_pointer[remain] = lineOffset * i + 2;
             }
             remain++;
@@ -141,10 +136,10 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
         }
         if (mapPoint[i].b4 == 0) {
             mapPoint[i].b4 = 1;
-           // printf("i is %d\n",i);
-          //  printf("b4 check mapPoint[i] = %X\n",mapPoint[i].val);
+            // printf("i is %d\n",i);
+            //  printf("b4 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-          //     printf("new data_block offset: %d\n",lineOffset * i + 3);
+                //     printf("new data_block offset: %d\n",lineOffset * i + 3);
                 data_pointer[remain] = lineOffset * i + 3;
             }
             remain++;
@@ -154,10 +149,10 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
         }
         if (mapPoint[i].b3 == 0) {
             mapPoint[i].b3 = 1;
-           // printf("i is %d\n",i);
-           // printf("b3 check mapPoint[i] = %X\n",mapPoint[i].val);
+            // printf("i is %d\n",i);
+            // printf("b3 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-            //    printf("new data_block offset: %d\n",lineOffset * i + 4);
+                //    printf("new data_block offset: %d\n",lineOffset * i + 4);
                 data_pointer[remain] = lineOffset * i + 4;
             }
             remain++;
@@ -168,10 +163,10 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
         }
         if (mapPoint[i].b2 == 0) {
             mapPoint[i].b2 = 1;
-           // printf("i is %d\n",i);
-           // printf("b2 check mapPoint[i] = %X\n",mapPoint[i].val);
+            // printf("i is %d\n",i);
+            // printf("b2 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-            //    printf("new data_block offset: %d\n",lineOffset * i + 5);
+                //    printf("new data_block offset: %d\n",lineOffset * i + 5);
                 data_pointer[remain] = lineOffset * i + 5;
             }
             remain++;
@@ -182,10 +177,10 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
         }
         if (mapPoint[i].b1 == 0) {
             mapPoint[i].b1 = 1;
-           // printf("i is %d\n",i);
-          //  printf("b1 check mapPoint[i] = %X\n",mapPoint[i].val);
+            // printf("i is %d\n",i);
+            //  printf("b1 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-           //     printf("new data_block offset: %d\n",lineOffset * i + 6);
+                //     printf("new data_block offset: %d\n",lineOffset * i + 6);
                 data_pointer[remain] = lineOffset * i + 6;
             }
             remain++;
@@ -195,10 +190,10 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
         }
         if (mapPoint[i].b0 == 0) {
             mapPoint[i].b0 = 1;
-           // printf("i is %d\n",i);
-           // printf("b0 check mapPoint[i] = %X\n",mapPoint[i].val);
+            // printf("i is %d\n",i);
+            // printf("b0 check mapPoint[i] = %X\n",mapPoint[i].val);
             if (data_pointer != NULL) {
-              //  printf("new data_block offset: %d\n",lineOffset * i + 7);
+                //  printf("new data_block offset: %d\n",lineOffset * i + 7);
                 data_pointer[remain] = lineOffset * i + 7;
             }
             remain++;
@@ -213,27 +208,27 @@ int isExists(const char *name) {
     for (int i = 0; i < rootOffset; i++) {
         if (rootBlock.entries[i].inum != 0 && rootBlock.entries[i].inum != 1) {
             if (rootBlock.entries[i].Name[0] == name[0] && rootBlock.entries[i].Name[1] == name[1]) {
-               // printf("i found file name %s with inum %d\n",rootBlock.entries[i].Name,rootBlock.entries[i].inum);
+                // printf("i found file name %s with inum %d\n",rootBlock.entries[i].Name,rootBlock.entries[i].inum);
                 return rootBlock.entries[i].inum;
             }
         }
     }
-   // printf("i couldn't found file name %s\n",name);
+    // printf("i couldn't found file name %s\n",name);
     return 0;
 };
 
 void fillData(unsigned int *pointer, const unsigned int blocks, const unsigned int lastBlocks, char var) {
     for (int i = 0; i < blocks; i++) {
         unsigned int index = pointer[i];
-    //    printf("fillData i: %d and offset : %d\n",i,index);
-        memset(data_blocks+index, var, sizeof(block));
+        //    printf("fillData i: %d and offset : %d\n",i,index);
+        memset(data_blocks + index, var, sizeof(block));
     }
-    if(lastBlocks != 0){
+    if (lastBlocks != 0) {
         unsigned int index = *(pointer + blocks);
-   //     printf("fillData offset : %d\n",index);
-        memset(data_blocks+index, var, lastBlocks);
+        //     printf("fillData offset : %d\n",index);
+        memset(data_blocks + index, var, lastBlocks);
     }
-  //  printf("fill data with: %c within %d\n",var, sizeof(block)*blocks + lastBlocks);
+    //  printf("fill data with: %c within %d\n",var, sizeof(block)*blocks + lastBlocks);
 }
 
 void putInRoot(const char *name, const unsigned inum) {
@@ -242,12 +237,12 @@ void putInRoot(const char *name, const unsigned inum) {
     }
     for (int i = 0; i < rootOffset; i++) {
         if (rootBlock.entries[i].inum == 0) {
-            rootBlock.entries[i].inum  = inum;
+            rootBlock.entries[i].inum = inum;
             rootBlock.entries[i].Name[0] = name[0];
             rootBlock.entries[i].Name[1] = name[1];
             rootBlock.entries[i].Name[2] = '\0';
 
-        //    printf("root put: %s\n",rootBlock.entries[i].Name);
+            //    printf("root put: %s\n",rootBlock.entries[i].Name);
             break;
         }
     }
@@ -270,7 +265,7 @@ void writeFile(const char *name, const unsigned int fsize) {
         return;
     }
     int inum = checkBitmap(i_bmap_blocks, 1, NULL);
- //   printf("%s 's new inum is %d\n",name,inum);
+    //   printf("%s 's new inum is %d\n",name,inum);
     if (inum == -1) {
         printf("No space\n");
         return;
@@ -280,12 +275,12 @@ void writeFile(const char *name, const unsigned int fsize) {
     inode_blocks[inum].blocks = needBlockNum;
 
     checkBitmap(d_bmap_blocks, needBlockNum, inode_blocks[inum].pointer);
-    for(int i = 0;i<needBlockNum;i++){
-      //  printf("direct pointer ith: %d\n",inode_blocks[inum].pointer[i]);
+    for (int i = 0; i < needBlockNum; i++) {
+        //  printf("direct pointer ith: %d\n",inode_blocks[inum].pointer[i]);
     }
-    if(lastBlock == 0){
+    if (lastBlock == 0) {
         fillData(inode_blocks[inum].pointer, needBlockNum, 0, *name);
-    }else{
+    } else {
         fillData(inode_blocks[inum].pointer, temp, lastBlock, *name);
     }
 
@@ -298,7 +293,7 @@ void readFile(const char *name, const unsigned int size) {
         printf("No such file\n");
         return;
     }
-  //  printf("fild %s 's inode is %d\n",name,inum);
+    //  printf("fild %s 's inode is %d\n",name,inum);
     unsigned int fsize = inode_blocks[inum].fsize;
     unsigned int min;
     if (size > fsize) {
@@ -310,11 +305,11 @@ void readFile(const char *name, const unsigned int size) {
     unsigned int needBlockNum = min / BLOCK_SIZE;
     unsigned int lastBlock = min % BLOCK_SIZE;
 
-   //  printf("need to read block: %d, last: %d\n",needBlockNum,lastBlock);
+    //  printf("need to read block: %d, last: %d\n",needBlockNum,lastBlock);
 
     for (int i = 0; i < needBlockNum; i++) {
         unsigned int index = inode_blocks[inum].pointer[i];
-      //  printf("data_block offset: %d\n",index);
+        //  printf("data_block offset: %d\n",index);
         unsigned int flag = 0;
         while (flag < BLOCK_SIZE) {
             putchar(data_blocks[index].byteLines[flag++].val);
@@ -322,7 +317,7 @@ void readFile(const char *name, const unsigned int size) {
     }
     unsigned int flag = 0;
     unsigned int index = inode_blocks[inum].pointer[needBlockNum];
-  //  printf("data_block offset: %d\n",index);
+    //  printf("data_block offset: %d\n",index);
     while (flag < lastBlock) {
         putchar(data_blocks[index].byteLines[flag++].val);
     }
@@ -366,7 +361,7 @@ void deleteFromRoot(const char *name) {
     for (int i = 0; i < rootOffset; i++) {
         if (rootBlock.entries[i].inum != 0 && rootBlock.entries[i].inum != 1) {
             if (rootBlock.entries[i].Name[0] == name[0] && rootBlock.entries[i].Name[1] == name[1]) {
-              //  printf("i delete file %s with inum %d\n",rootBlock.entries[i].Name,rootBlock.entries[i].inum);
+                //  printf("i delete file %s with inum %d\n",rootBlock.entries[i].Name,rootBlock.entries[i].inum);
                 rootBlock.entries[i].inum = 0;
                 break;
             }
@@ -390,13 +385,17 @@ void deleteFile(const char *name) {
 }
 
 void showDump() {
+    /*
+    unsigned int num;
+
     printf("----super block----\n");
-    unsigned int num =0;
+    num =0
     while(num < BLOCK_SIZE){
         int num1 = super_blocks->byteLines[num].h1;
         int num2 = super_blocks->byteLines[num++].h0;
         printf("%X%X",num1,num2);
     }
+
     printf("\n-------------------\n");
     printf("----i_bmap block----\n");
     num =0;
@@ -433,8 +432,13 @@ void showDump() {
     }
     data_blocks = (block *) malloc(sizeof(block) * 56);
     printf("\n-------------------\n");
-}
+     */
 
+    for (int i = 0; i < 4096 * 64; i++) { // 4kb (4096 bytes) * 64 blocks
+        printf("%.2x ", *((unsigned char *) partition + i));
+
+    }
+}
 
 int main(int argc, char *argv[]) {
     FILE *fd = NULL;
@@ -442,7 +446,7 @@ int main(int argc, char *argv[]) {
     char fileName[3];
     char command;
     unsigned int size = 0;
-/*
+
     if (argc != 2) {
         printf("ku_fs: Wrong number of arguments\n");
         return 1;
@@ -453,7 +457,7 @@ int main(int argc, char *argv[]) {
         printf("ku_fs: Fail to open the input file\n");
         return 1;
     }
-*/
+
     initPartition();
 
     while (fgets(line, 1024, stdin) != NULL) {
@@ -473,7 +477,7 @@ int main(int argc, char *argv[]) {
                 break;
         }
     }
-DUMP:
+    DUMP:
     showDump();
     return 0;
 }

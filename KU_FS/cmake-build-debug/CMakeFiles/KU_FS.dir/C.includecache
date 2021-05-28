@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-C:/Users/USER/CLionProjects/KU_FS/main.c
+C:/Users/USER/CLionProjects/KU_MMU/KU_FS/main.c
 stdio.h
 -
 stdlib.h

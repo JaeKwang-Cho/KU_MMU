@@ -1,3 +1,3 @@
-C:/Users/USER/CLionProjects/KU_FS/cmake-build-debug/CMakeFiles/KU_FS.dir
-C:/Users/USER/CLionProjects/KU_FS/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/USER/CLionProjects/KU_FS/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+C:/Users/USER/CLionProjects/KU_MMU/KU_FS/cmake-build-debug/CMakeFiles/KU_FS.dir
+C:/Users/USER/CLionProjects/KU_MMU/KU_FS/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/USER/CLionProjects/KU_MMU/KU_FS/cmake-build-debug/CMakeFiles/rebuild_cache.dir
