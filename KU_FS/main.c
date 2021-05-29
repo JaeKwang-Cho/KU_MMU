@@ -85,11 +85,11 @@ void initPartition() {
     rootBlock = *(root_block *) &data_blocks[0];
 }
 
-int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) {
+int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer_orNULL) {
     byteLine *mapPoint = (byteLine *) bmap;
     unsigned int remain = 0;
     int lineOffset = 8;
-    if (data_pointer != NULL) {
+    if (data_pointer_orNULL != NULL) {
         // printf("d_bmap check\n");
     } else {
         // printf("i_bmap check\n");
@@ -99,9 +99,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b7 = 1;
             //  printf("i is %d\n",i);
             //  printf("b7 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //      printf("new data_block offset: %d\n",lineOffset * i);
-                data_pointer[remain] = lineOffset * i;
+                data_pointer_orNULL[remain] = lineOffset * i;
             }
             remain++;
             if (remain >= num) {
@@ -112,9 +112,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b6 = 1;
             //   printf("i is %d\n",i);
             //  printf("b6 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //     printf("new data_block offset: %d\n",lineOffset * i + 1);
-                data_pointer[remain] = lineOffset * i + 1;
+                data_pointer_orNULL[remain] = lineOffset * i + 1;
             }
             remain++;
             if (remain >= num) {
@@ -125,9 +125,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b5 = 1;
             //  printf("i is %d\n",i);
             //  printf("b5 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //      printf("new data_block offset: %d\n",lineOffset * i + 2);
-                data_pointer[remain] = lineOffset * i + 2;
+                data_pointer_orNULL[remain] = lineOffset * i + 2;
             }
             remain++;
             if (remain >= num) {
@@ -138,9 +138,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b4 = 1;
             // printf("i is %d\n",i);
             //  printf("b4 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //     printf("new data_block offset: %d\n",lineOffset * i + 3);
-                data_pointer[remain] = lineOffset * i + 3;
+                data_pointer_orNULL[remain] = lineOffset * i + 3;
             }
             remain++;
             if (remain >= num) {
@@ -151,9 +151,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b3 = 1;
             // printf("i is %d\n",i);
             // printf("b3 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //    printf("new data_block offset: %d\n",lineOffset * i + 4);
-                data_pointer[remain] = lineOffset * i + 4;
+                data_pointer_orNULL[remain] = lineOffset * i + 4;
             }
             remain++;
             if (remain >= num) {
@@ -165,9 +165,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b2 = 1;
             // printf("i is %d\n",i);
             // printf("b2 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //    printf("new data_block offset: %d\n",lineOffset * i + 5);
-                data_pointer[remain] = lineOffset * i + 5;
+                data_pointer_orNULL[remain] = lineOffset * i + 5;
             }
             remain++;
             if (remain >= num) {
@@ -179,9 +179,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b1 = 1;
             // printf("i is %d\n",i);
             //  printf("b1 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //     printf("new data_block offset: %d\n",lineOffset * i + 6);
-                data_pointer[remain] = lineOffset * i + 6;
+                data_pointer_orNULL[remain] = lineOffset * i + 6;
             }
             remain++;
             if (remain >= num) {
@@ -192,9 +192,9 @@ int checkBitmap(void *bmap, const unsigned int num, unsigned int *data_pointer) 
             mapPoint[i].b0 = 1;
             // printf("i is %d\n",i);
             // printf("b0 check mapPoint[i] = %X\n",mapPoint[i].val);
-            if (data_pointer != NULL) {
+            if (data_pointer_orNULL != NULL) {
                 //  printf("new data_block offset: %d\n",lineOffset * i + 7);
-                data_pointer[remain] = lineOffset * i + 7;
+                data_pointer_orNULL[remain] = lineOffset * i + 7;
             }
             remain++;
             if (remain >= num) {
@@ -264,6 +264,7 @@ void writeFile(const char *name, const unsigned int fsize) {
         printf("No space\n");
         return;
     }
+    usedDataBlock -= needBlockNum;
     int inum = checkBitmap(i_bmap_blocks, 1, NULL);
     //   printf("%s 's new inum is %d\n",name,inum);
     if (inum == -1) {
@@ -376,6 +377,7 @@ void deleteFile(const char *name) {
         return;
     }
     unsigned int blocks = inode_blocks[inum].blocks;
+    usedDataBlock+=blocks;
     for (int i = 0; i < blocks; i++) {
         unsigned int index = inode_blocks[inum].pointer[i];
         zeroBitmap(d_bmap_blocks, index);
